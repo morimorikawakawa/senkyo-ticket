@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>生徒会役員選挙 投票用紙入場整理券 自動作成ツール</title>
+  <!-- Excelファイル（.xlsx / .xls / .csv）をブラウザ内で直接読み書きするためのライブラリ -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    /* =========================================
+       画面操作用UI（印刷時は非表示）
+    ========================================= */
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: "Yu Gothic", "Meiryo", "Hiragino Kaku Gothic ProN", sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f0f2f5;
+      color: #000;
+    }
+    .control-panel {
+      max-width: 1120px;
+      margin: 24px auto;
+      background: #fff;
+      padding: 24px 32px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .control-panel h1 {
+      margin-top: 0;
+      font-size: 1.4rem;
+      border-bottom: 2px solid #1a56db;
+      padding-bottom: 8px;
+      color: #1a56db;
+    }
+    .grid-form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .date-section {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .date-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.92rem;
+    }
+    .date-row-title {
+      font-weight: bold;
+      color: #1e293b;
+      min-width: 155px;
+    }
+    .num-input {
+      width: 44px;
+      padding: 5px 4px;
+      text-align: center;
+      border: 1px solid #94a3b8;
+      border-radius: 4px;
+      font-size: 0.95rem;
+    }
+    .cal-picker {
+      padding: 4px 6px;
+      border: 1px solid #94a3b8;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      margin-left: 8px;
+      background: #fff;
+      cursor: pointer;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group label {
+      font-size: 0.85rem;
+      font-weight: bold;
+      margin-bottom: 4px;
+      color: #444;
+    }
+    .form-group input, .form-group textarea {
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-family: inherit;
+    }
+    .note-box {
+      background: #eff6ff;
+      border-left: 4px solid #1a56db;
+      padding: 10px 16px;
+      font-size: 0.88rem;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+
+    /* --- 個別入力名簿テーブル --- */
+    .roster-header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .roster-header-bar label {
+      font-size: 0.95rem;
+      font-weight: bold;
+      color: #1e293b;
+    }
+    .roster-tools {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #f8fafc;
+      color: #334155;
+      cursor: pointer;
+    }
+    .btn-sm:hover {
+      background: #e2e8f0;
+    }
+    .btn-excel {
+      background: #047857;
+      color: #fff;
+      border-color: #047857;
+    }
+    .btn-excel:hover {
+      background: #065f46;
+    }
+    .paste-drawer {
+      display: none;
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+    }
+    .paste-drawer textarea {
+      width: 100%;
+      height: 100px;
+      padding: 8px;
+      border: 1px solid #94a3b8;
+      border-radius: 6px;
+      font-family: monospace;
+      margin: 6px 0;
+    }
+    .roster-table-wrap {
+      max-height: 360px;
+      overflow-y: auto;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    .roster-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+    .roster-table th {
+      position: sticky;
+      top: 0;
+      background: #e2e8f0;
+      color: #1e293b;
+      padding: 8px 6px;
+      text-align: center;
+      border-bottom: 1px solid #cbd5e1;
+      z-index: 1;
+    }
+    .roster-table td {
+      padding: 5px 6px;
+      border-bottom: 1px solid #e2e8f0;
+      text-align: center;
+    }
+    .roster-table tr:nth-child(even) {
+      background-color: #f8fafc;
+    }
+    .roster-table input, .roster-table select {
+      padding: 5px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      font-size: 0.92rem;
+      font-family: inherit;
+      background: #fff;
+    }
+    .roster-table input:focus, .roster-table select:focus {
+      outline: 2px solid #1a56db;
+      border-color: #1a56db;
+      background-color: #eff6ff;
+    }
+    .inp-grade, .inp-cls {
+      width: 56px;
+      text-align: center;
+    }
+    .inp-gender {
+      width: 72px;
+    }
+    .inp-name {
+      width: 100%;
+      min-width: 160px;
+    }
+    .inp-ballot {
+      width: 115px;
+    }
+    .btn-del {
+      background: none;
+      border: none;
+      color: #dc2626;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+    .btn-del:hover {
+      background: #fee2e2;
+      border-radius: 4px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .btn-main {
+      padding: 10px 20px;
+      font-size: 1rem;
+      font-weight: bold;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn-main:hover {
+      opacity: 0.88;
+    }
+    .btn-primary {
+      background-color: #1a56db;
+      color: #fff;
+    }
+    .btn-print {
+      background-color: #059669;
+      color: #fff;
+    }
+    .status-text {
+      font-weight: bold;
+      color: #1a56db;
+      margin-left: 8px;
+    }
+
+    /* =========================================
+       印刷用A4横向きシートレイアウト（4分割）
+    ========================================= */
+    .preview-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      padding-bottom: 40px;
+    }
+    .sheet {
+      width: 297mm;
+      height: 210mm;
+      background: #fff;
+      padding: 8mm 10mm;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 4mm;
+      page-break-after: always;
+      break-after: page;
+    }
+    .sheet:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
+    /* 入場券 1枚分の共通外枠 */
+    .ticket {
+      border: 2px solid #000;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    /* =========================================
+       表面デザイン
+    ========================================= */
+    .front-ticket {
+      padding: 0 6mm 5mm 6mm;
+    }
+    .front-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-left: -6mm;
+      margin-right: -6mm;
+    }
+    /* 左上の丸（外枠の少し内側に綺麗に配置） */
+    .post-mark {
+      width: 19.5mm;
+      height: 19.5mm;
+      border: 1.6px solid #000;
+      border-radius: 50%;
+      margin-top: 3mm;
+      margin-left: 4mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8.5pt;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+    .issuer-info {
+      text-align: center;
+      flex: 1;
+      padding-top: 4.5mm;
+      font-size: 10.5pt;
+      line-height: 1.65;
+      letter-spacing: 0.5px;
+    }
+    .attr-table {
+      border-collapse: collapse;
+      text-align: center;
+      flex-shrink: 0;
+      margin-top: -2px;
+      margin-right: -2px;
+    }
+    .attr-table td {
+      border: 1.8px solid #000;
+      width: 12.5mm;
+    }
+    .attr-table .val {
+      height: 14mm;
+      font-size: 12pt;
+    }
+    .attr-table .lbl {
+      height: 5.5mm;
+      font-size: 8.5pt;
+    }
+
+    .front-middle {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      padding: 1mm 0;
+    }
+    .senkyo-badge {
+      background-color: #000;
+      color: #fff;
+      font-family: "Yu Mincho", "Hiragino Mincho ProN", "MS PMincho", serif;
+      writing-mode: vertical-rl;
+      text-orientation: upright;
+      font-size: 17pt;
+      font-weight: bold;
+      width: 14.5mm;
+      height: 27mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      letter-spacing: 4px;
+      margin-left: 1.5mm;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .student-name {
+      flex: 1;
+      text-align: center;
+      font-size: 21pt;
+      letter-spacing: 4px;
+      padding-right: 8mm;
+    }
+
+    .front-bottom {
+      display: flex;
+      flex-direction: column;
+      gap: 3mm;
+      padding: 0 1.5mm;
+    }
+    .bottom-row {
+      display: flex;
+      align-items: center;
+    }
+    .bottom-left {
+      width: 44mm;
+      font-size: 11.5pt;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+    .bottom-right {
+      flex: 1;
+      text-align: center;
+      font-size: 10.5pt;
+      line-height: 1.6;
+    }
+    .fixed-num {
+      display: inline-block;
+      min-width: 6mm;
+      text-align: center;
+    }
+    .fixed-day {
+      display: inline-block;
+      min-width: 4.5mm;
+      text-align: center;
+    }
+    .ballot-type .selected {
+      border: 1.5px solid #000;
+      border-radius: 50%;
+      padding: 1px 5px;
+    }
+
+    /* =========================================
+       裏面デザイン
+    ========================================= */
+    .back-ticket {
+      padding: 4.5mm 6mm;
+      display: grid;
+      grid-template-columns: 1.03fr 0.97fr;
+      gap: 5.5mm;
+      align-items: stretch;
+    }
+    .back-left {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .pledge-header {
+      text-align: center;
+      font-size: 8.5pt;
+      font-weight: bold;
+      margin-bottom: 1mm;
+    }
+    .pledge-text {
+      font-size: 6pt;
+      line-height: 1.5;
+      letter-spacing: -0.2px;
+      white-space: nowrap;
+    }
+    .date-gap {
+      display: inline-block;
+      width: 8mm;
+    }
+    .pledge-date {
+      text-align: right;
+      font-size: 7.2pt;
+      margin: 1.5mm 1mm 1.5mm 0;
+    }
+    .form-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1.6px solid #000;
+      margin-bottom: 2.2mm;
+    }
+    .form-table td {
+      border: 1.3px solid #000;
+    }
+    .form-table .v-label {
+      width: 6.5mm;
+      text-align: center;
+      vertical-align: middle;
+      font-size: 7.2pt;
+      line-height: 1.35;
+      padding: 1mm 0;
+    }
+    .form-table .write-area {
+      height: 13.5mm;
+    }
+    .form-table .birth-cell {
+      height: 7.5mm;
+      font-size: 7.3pt;
+      padding-left: 3mm;
+      vertical-align: middle;
+    }
+    .reason-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1.6px solid #000;
+      font-size: 7.2pt;
+    }
+    .reason-table td {
+      border: 1.3px solid #000;
+      height: 5.8mm;
+      vertical-align: middle;
+    }
+    .reason-table .num-col {
+      width: 8mm;
+      text-align: center;
+    }
+    .reason-table .txt-col {
+      padding-left: 2.5mm;
+    }
+
+    .back-right {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      font-size: 7.6pt;
+      line-height: 1.5;
+      padding: 0.5mm 0;
+    }
+    .early-section-title {
+      font-size: 8.3pt;
+      font-weight: bold;
+      margin-bottom: 0.8mm;
+    }
+    .early-row {
+      display: flex;
+      align-items: flex-start;
+    }
+    .early-label {
+      flex-shrink: 0;
+    }
+    .early-val {
+      flex: 1;
+    }
+    .early-num {
+      display: inline-block;
+      min-width: 4.5mm;
+      text-align: center;
+    }
+    .early-day {
+      display: inline-block;
+      min-width: 3.5mm;
+      text-align: center;
+    }
+    .notes-title {
+      margin-bottom: 0.5mm;
+    }
+    .notes-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .notes-list li {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 1.6mm;
+    }
+    .notes-list li:last-child {
+      margin-bottom: 0;
+    }
+    .note-num {
+      width: 1.3em;
+      flex-shrink: 0;
+    }
+    .note-body {
+      flex: 1;
+    }
+    .no-break {
+      display: inline-block;
+      text-indent: 0;
+    }
+
+    /* =========================================
+       印刷時専用スタイル（A4横向き）
+    ========================================= */
+    @page {
+      size: A4 landscape;
+      margin: 0;
+    }
+    @media print {
+      body {
+        background: none;
+      }
+      .control-panel {
+        display: none !important;
+      }
+      .preview-area {
+        padding: 0;
+        gap: 0;
+      }
+      .sheet {
+        box-shadow: none;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 操作パネル（印刷時には消えます） -->
+  <div class="control-panel">
+    <h1>🗳️ 生徒会役員選挙 投票用紙入場整理券 自動作成ツール</h1>
+    <div class="note-box">
+      <strong>使い方：</strong><br>
+      1. 学校名・会場名と、投票日・期日前期間の<strong>数字・曜日</strong>を入力します。<br>
+      2. <strong>「📂 Excelファイル読込」</strong>からExcel名簿（.xlsx / .xls / .csv）を取り込むか、下の表で直接入力・編集します。<br>
+      3. <strong>「印刷 / PDFとして保存」</strong>からA4横向き・両面印刷（<strong>短辺とじ</strong>）を行ってください。
+    </div>
+
+    <div class="grid-form">
+      <div class="form-group">
+        <label>学校名</label>
+        <input type="text" id="schoolName" value="〇〇県立〇〇特別支援学校" oninput="generateTickets()">
+      </div>
+      <div class="form-group">
+        <label>委員会名</label>
+        <input type="text" id="committeeName" value="高等部選挙管理委員会" oninput="generateTickets()">
+      </div>
+      <div class="form-group">
+        <label>郵便欄マーク文字</label>
+        <input type="text" id="postMark" value="〇〇郵便" oninput="generateTickets()">
+      </div>
+      <div class="form-group">
+        <label>投票の場所（表面）</label>
+        <input type="text" id="votePlace" value="本校プレイルーム" oninput="generateTickets()">
+      </div>
+      <div class="form-group">
+        <label>期日前投票の場所（裏面）</label>
+        <input type="text" id="earlyPlace" value="本校会議室" oninput="generateTickets()">
+      </div>
+    </div>
+
+    <!-- 日付専用・様式固定入力エリア -->
+    <div class="date-section">
+      <div class="date-row">
+        <span class="date-row-title">■ 投票日（表面）：</span>
+        <span>令和</span>
+        <input type="text" class="num-input" id="vYear" value="8" oninput="generateTickets()">
+        <span>年</span>
+        <input type="text" class="num-input" id="vMonth" value="" oninput="generateTickets()">
+        <span>月</span>
+        <input type="text" class="num-input" id="vDay" value="" oninput="generateTickets()">
+        <span>日（</span>
+        <input type="text" class="num-input" id="vDow" value="" style="width: 36px;" oninput="generateTickets()">
+        <span>）</span>
+        <input type="date" class="cal-picker" title="カレンダーから自動入力" onchange="fillFromCalendar(this.value, 'vYear', 'vMonth', 'vDay', 'vDow')">
+      </div>
+
+      <div class="date-row">
+        <span class="date-row-title">■ 期日前期間（開始）：</span>
+        <span>令和</span>
+        <input type="text" class="num-input" id="eStartYear" value="8" oninput="generateTickets()">
+        <span>年</span>
+        <input type="text" class="num-input" id="eStartMonth" value="" oninput="generateTickets()">
+        <span>月</span>
+        <input type="text" class="num-input" id="eStartDay" value="" oninput="generateTickets()">
+        <span>日（</span>
+        <input type="text" class="num-input" id="eStartDow" value="" style="width: 36px;" oninput="generateTickets()">
+        <span>）～</span>
+        <input type="date" class="cal-picker" title="カレンダーから自動入力" onchange="fillFromCalendar(this.value, 'eStartYear', 'eStartMonth', 'eStartDay', 'eStartDow')">
+      </div>
+
+      <div class="date-row">
+        <span class="date-row-title">■ 期日前期間（終了）：</span>
+        <span>令和</span>
+        <input type="text" class="num-input" id="eEndYear" value="8" oninput="generateTickets()">
+        <span>年</span>
+        <input type="text" class="num-input" id="eEndMonth" value="" oninput="generateTickets()">
+        <span>月</span>
+        <input type="text" class="num-input" id="eEndDay" value="" oninput="generateTickets()">
+        <span>日（</span>
+        <input type="text" class="num-input" id="eEndDow" value="" style="width: 36px;" oninput="generateTickets()">
+        <span>）</span>
+        <input type="date" class="cal-picker" title="カレンダーから自動入力" onchange="fillFromCalendar(this.value, 'eEndYear', 'eEndMonth', 'eEndDay', 'eEndDow')">
+      </div>
+    </div>
+
+    <!-- 個別入力名簿エリア -->
+    <div class="roster-header-bar">
+      <label>■ 生徒名簿入力欄</label>
+      <div class="roster-tools">
+        <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleExcelFile(event)">
+        <button type="button" class="btn-sm btn-excel" onclick="document.getElementById('excelFileInput').click()">📂 Excelファイル読込</button>
+        <button type="button" class="btn-sm" onclick="downloadTemplateExcel()">📥 雛形Excelダウンロード</button>
+        <button type="button" class="btn-sm" onclick="togglePasteDrawer()">📋 コピペで貼付</button>
+        <button type="button" class="btn-sm" onclick="addRows(1)">＋ 1行追加</button>
+        <button type="button" class="btn-sm" onclick="addRows(30)">＋ 30名分追加</button>
+        <button type="button" class="btn-sm" onclick="loadSampleRows()">サンプル読込</button>
+        <button type="button" class="btn-sm" style="color:#dc2626;" onclick="clearAllRows()">全クリア</button>
+      </div>
+    </div>
+
+    <!-- Excel一括貼り付け用の開閉パネル -->
+    <div class="paste-drawer" id="pasteDrawer">
+      <div style="font-size: 0.85rem; font-weight: bold;">Excelで「学年・組・性別・氏名・投票用紙（任意）」の列をコピーして下に貼り付け、「名簿欄へ反映」を押してください：</div>
+      <textarea id="bulkPasteText" placeholder="例：&#10;1	1	男	サンプル太郎	記述式&#10;1	2	女	サンプル花子	選択式"></textarea>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" class="btn-sm" style="background:#1a56db; color:#fff;" onclick="importFromPaste()">名簿欄へ反映する</button>
+        <button type="button" class="btn-sm" onclick="togglePasteDrawer()">閉じる</button>
+      </div>
+    </div>
+
+    <div class="roster-table-wrap">
+      <table class="roster-table">
+        <thead>
+          <tr>
+            <th style="width: 46px;">No.</th>
+            <th style="width: 76px;">学年</th>
+            <th style="width: 76px;">組</th>
+            <th style="width: 88px;">性別</th>
+            <th>氏名</th>
+            <th style="width: 135px;">投票用紙</th>
+            <th style="width: 50px;">削除</th>
+          </tr>
+        </thead>
+        <tbody id="rosterTbody" onkeydown="handleTableKeydown(event)"></tbody>
+      </table>
+    </div>
+
+    <div class="btn-row">
+      <button type="button" class="btn-main btn-primary" onclick="generateTickets()">プレビューを更新する</button>
+      <button type="button" class="btn-main btn-print" onclick="window.print()">印刷 / PDFとして保存</button>
+      <span class="status-text" id="statusText"></span>
+    </div>
+  </div>
+
+  <!-- プレビュー＆印刷領域 -->
+  <div class="preview-area" id="previewArea"></div>
+
+  <script>
+    const NEWLINE = String.fromCharCode(10);
+    const TAB = String.fromCharCode(9);
+    const DOW_LIST = ["日", "月", "火", "水", "木", "金", "土"];
+
+    function fillFromCalendar(dateStr, yId, mId, dId, dowId) {
+      if (!dateStr) return;
+      const parts = dateStr.split("-");
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      const dateObj = new Date(year, month - 1, day);
+
+      document.getElementById(yId).value = year - 2018;
+      document.getElementById(mId).value = month;
+      document.getElementById(dId).value = day;
+      document.getElementById(dowId).value = DOW_LIST[dateObj.getDay()];
+      generateTickets();
+    }
+
+    // Excelファイル（.xlsx / .xls / .csv）の読み込み処理
+    function handleExcelFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (typeof XLSX === "undefined") {
+        alert("Excel読込ライブラリの読み込み中です。インターネット接続をご確認のうえ、数秒後にもう一度お試しください。");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: "array" });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+
+          const tbody = document.getElementById("rosterTbody");
+          tbody.innerHTML = "";
+          let importedCount = 0;
+
+          for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.length === 0) continue;
+
+            const c0 = String(row[0] || "").trim();
+            const c1 = String(row[1] || "").trim();
+            const c2 = String(row[2] || "").trim();
+            const c3 = String(row[3] || "").trim();
+            const c4 = String(row[4] || "").trim();
+
+            if (c0 === "" && c1 === "" && c2 === "" && c3 === "") continue;
+
+            if (i === 0 && (c0.indexOf("学年") !== -1 || c3.indexOf("氏名") !== -1 || c3.indexOf("名前") !== -1)) {
+              continue;
+            }
+
+            let genderVal = "";
+            if (c2.indexOf("男") !== -1) genderVal = "男";
+            else if (c2.indexOf("女") !== -1) genderVal = "女";
+
+            let ballotVal = "記述式";
+            if (c4.indexOf("選択") !== -1) ballotVal = "選択式";
+            else if (c4 === "なし" || c4 === "指定なし" || c4 === "-") ballotVal = "";
+
+            tbody.appendChild(createRowElement({
+              grade: c0,
+              cls: c1,
+              gender: genderVal,
+              name: c3,
+              ballot: ballotVal
+            }));
+            importedCount++;
+          }
+
+          if (importedCount === 0) {
+            alert("Excelファイル内に読み込める名簿データが見つかりませんでした。");
+            addRows(4);
+          } else {
+            renumberRows();
+            generateTickets();
+            alert(`「${file.name}」から ${importedCount}名分のデータを取り込みました！`);
+          }
+        } catch (err) {
+          alert("Excelファイルの読み込みに失敗しました。ファイル形式をご確認ください。\n詳細: " + err.message);
+        } finally {
+          event.target.value = "";
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // 入力用雛形Excelファイルのダウンロード（ダミーデータのみ）
+    function downloadTemplateExcel() {
+      if (typeof XLSX === "undefined") {
+        alert("ライブラリの読み込み中です。数秒後にもう一度お試しください。");
+        return;
+      }
+      const wsData = [
+        ["学年", "組", "性別", "氏名", "投票用紙（記述式/選択式/指定なし）"],
+        ["1", "1", "男", "サンプル太郎", "記述式"],
+        ["1", "2", "女", "サンプル花子", "選択式"]
+      ];
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws["!cols"] = [{ wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 22 }, { wch: 32 }];
+      XLSX.utils.book_append_sheet(wb, ws, "生徒名簿");
+      XLSX.writeFile(wb, "生徒会選挙_入場券名簿雛形.xlsx");
+    }
+
+    // キーボードナビゲーション（Enter・矢印キー移動）
+    function handleTableKeydown(e) {
+      if (e.isComposing || e.keyCode === 229) return;
+
+      const target = e.target;
+      if (!target.classList.contains("nav-cell")) return;
+
+      const currentRow = target.closest("tr");
+      const tbody = document.getElementById("rosterTbody");
+      const rows = Array.from(tbody.querySelectorAll("tr"));
+      const rowIndex = rows.indexOf(currentRow);
+
+      const rowCells = Array.from(currentRow.querySelectorAll(".nav-cell"));
+      const colIndex = rowCells.indexOf(target);
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (rowIndex > 0) {
+            focusCell(rows[rowIndex - 1], colIndex);
+          }
+        } else {
+          if (rowIndex < rows.length - 1) {
+            focusCell(rows[rowIndex + 1], colIndex);
+          } else {
+            const prevGrade = currentRow.querySelector(".inp-grade").value;
+            const prevCls = currentRow.querySelector(".inp-cls").value;
+            const newRow = createRowElement({ grade: prevGrade, cls: prevCls, gender: "", name: "", ballot: "記述式" });
+            tbody.appendChild(newRow);
+            renumberRows();
+            focusCell(newRow, colIndex);
+          }
+        }
+        return;
+      }
+
+      if (e.key === "ArrowDown" && target.tagName !== "SELECT") {
+        e.preventDefault();
+        if (rowIndex < rows.length - 1) {
+          focusCell(rows[rowIndex + 1], colIndex);
+        }
+        return;
+      }
+      if (e.key === "ArrowUp" && target.tagName !== "SELECT") {
+        e.preventDefault();
+        if (rowIndex > 0) {
+          focusCell(rows[rowIndex - 1], colIndex);
+        }
+        return;
+      }
+
+      if (e.key === "ArrowRight") {
+        if (target.tagName === "INPUT" && target.selectionStart < target.value.length) {
+          return;
+        }
+        e.preventDefault();
+        if (colIndex < rowCells.length - 1) {
+          focusCell(currentRow, colIndex + 1);
+        } else if (rowIndex < rows.length - 1) {
+          focusCell(rows[rowIndex + 1], 0);
+        }
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        if (target.tagName === "INPUT" && target.selectionStart > 0) {
+          return;
+        }
+        e.preventDefault();
+        if (colIndex > 0) {
+          focusCell(currentRow, colIndex - 1);
+        } else if (rowIndex > 0) {
+          focusCell(rows[rowIndex - 1], rowCells.length - 1);
+        }
+        return;
+      }
+    }
+
+    function focusCell(row, colIndex) {
+      const cells = row.querySelectorAll(".nav-cell");
+      const nextEl = cells[colIndex];
+      if (!nextEl) return;
+      nextEl.focus();
+      if (nextEl.tagName === "INPUT") {
+        nextEl.select();
+      }
+    }
+
+    function createRowElement(data) {
+      const d = data || { grade: "", cls: "", gender: "", name: "", ballot: "記述式" };
+      const tr = document.createElement("tr");
+
+      tr.innerHTML = `
+        <td class="row-no"></td>
+        <td><input type="text" class="inp-grade nav-cell" value="${escapeHTML(d.grade)}" placeholder="1" oninput="generateTickets()"></td>
+        <td><input type="text" class="inp-cls nav-cell" value="${escapeHTML(d.cls)}" placeholder="1" oninput="generateTickets()"></td>
+        <td>
+          <select class="inp-gender nav-cell" onchange="generateTickets()">
+            <option value="" ${d.gender === "" ? "selected" : ""}>-</option>
+            <option value="男" ${d.gender === "男" ? "selected" : ""}>男</option>
+            <option value="女" ${d.gender === "女" ? "selected" : ""}>女</option>
+          </select>
+        </td>
+        <td><input type="text" class="inp-name nav-cell" value="${escapeHTML(d.name)}" placeholder="氏名を入力" oninput="generateTickets()"></td>
+        <td>
+          <select class="inp-ballot nav-cell" onchange="generateTickets()">
+            <option value="記述式" ${d.ballot === "記述式" ? "selected" : ""}>記述式</option>
+            <option value="選択式" ${d.ballot === "選択式" ? "selected" : ""}>選択式</option>
+            <option value="" ${d.ballot === "" ? "selected" : ""}>指定なし</option>
+          </select>
+        </td>
+        <td><button type="button" class="btn-del" title="この行を削除" onclick="deleteRow(this)">✕</button></td>
+      `;
+      return tr;
+    }
+
+    function renumberRows() {
+      const rows = document.querySelectorAll("#rosterTbody tr");
+      rows.forEach(function(row, idx) {
+        row.querySelector(".row-no").textContent = idx + 1;
+      });
+    }
+
+    function addRows(count) {
+      const tbody = document.getElementById("rosterTbody");
+      for (let i = 0; i < count; i++) {
+        tbody.appendChild(createRowElement({ grade: "", cls: "", gender: "", name: "", ballot: "記述式" }));
+      }
+      renumberRows();
+    }
+
+    function deleteRow(btn) {
+      const tr = btn.closest("tr");
+      tr.remove();
+      renumberRows();
+      generateTickets();
+    }
+
+    function clearAllRows() {
+      const tbody = document.getElementById("rosterTbody");
+      tbody.innerHTML = "";
+      addRows(4);
+      generateTickets();
+    }
+
+    // サンプルデータ読込（サンプル太郎・サンプル花子の2名のみ）
+    function loadSampleRows() {
+      const sampleList = [
+        { grade: "1", cls: "1", gender: "男", name: "サンプル太郎", ballot: "記述式" },
+        { grade: "1", cls: "2", gender: "女", name: "サンプル花子", ballot: "選択式" }
+      ];
+
+      const tbody = document.getElementById("rosterTbody");
+      tbody.innerHTML = "";
+      sampleList.forEach(function(item) {
+        tbody.appendChild(createRowElement(item));
+      });
+      renumberRows();
+      generateTickets();
+    }
+
+    function togglePasteDrawer() {
+      const drawer = document.getElementById("pasteDrawer");
+      drawer.style.display = (drawer.style.display === "block") ? "none" : "block";
+    }
+
+    function importFromPaste() {
+      const rawText = document.getElementById("bulkPasteText").value;
+      const lines = rawText
+        .replace(/\r\n/g, NEWLINE)
+        .replace(/\r/g, NEWLINE)
+        .split(NEWLINE)
+        .map(function(l) { return l.trim(); })
+        .filter(function(l) { return l.length > 0; });
+
+      if (lines.length === 0) {
+        alert("貼り付け欄にデータがありません。");
+        return;
+      }
+
+      const tbody = document.getElementById("rosterTbody");
+      tbody.innerHTML = "";
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.indexOf("学年") === 0 && line.indexOf("氏名") !== -1) {
+          continue;
+        }
+        const parts = line.indexOf(TAB) !== -1 ? line.split(TAB) : line.split(",");
+        const rawBallot = (parts[4] || "").trim();
+        let ballotVal = "記述式";
+        if (rawBallot.indexOf("選択") !== -1) ballotVal = "選択式";
+        else if (rawBallot === "なし" || rawBallot === "指定なし") ballotVal = "";
+
+        const rawGender = (parts[2] || "").trim();
+        let genderVal = "";
+        if (rawGender.indexOf("男") !== -1) genderVal = "男";
+        else if (rawGender.indexOf("女") !== -1) genderVal = "女";
+
+        tbody.appendChild(createRowElement({
+          grade: (parts[0] || "").trim(),
+          cls: (parts[1] || "").trim(),
+          gender: genderVal,
+          name: (parts[3] || "").trim(),
+          ballot: ballotVal
+        }));
+      }
+
+      renumberRows();
+      document.getElementById("bulkPasteText").value = "";
+      document.getElementById("pasteDrawer").style.display = "none";
+      generateTickets();
+    }
+
+    function collectStudentsFromTable() {
+      const rows = document.querySelectorAll("#rosterTbody tr");
+      const students = [];
+      rows.forEach(function(row) {
+        const grade = row.querySelector(".inp-grade").value.trim();
+        const cls = row.querySelector(".inp-cls").value.trim();
+        const gender = row.querySelector(".inp-gender").value;
+        const name = row.querySelector(".inp-name").value.trim();
+        const ballot = row.querySelector(".inp-ballot").value;
+
+        if (name !== "" || grade !== "" || cls !== "") {
+          students.push({ grade: grade, cls: cls, gender: gender, name: name, ballot: ballot });
+        }
+      });
+      return students;
+    }
+
+    function createFrontTicketHTML(student, config) {
+      if (!student) {
+        return '<div class="ticket" style="border-style: dashed; border-color: #ccc;"></div>';
+      }
+      const isWritten = student.ballot.indexOf("記述") !== -1;
+      const isSelect = student.ballot.indexOf("選択") !== -1;
+
+      return `
+        <div class="ticket front-ticket">
+          <div class="front-header">
+            <div class="post-mark">${escapeHTML(config.postMark)}</div>
+            <div class="issuer-info">
+              ${escapeHTML(config.schoolName)}<br>
+              ${escapeHTML(config.committeeName)}
+            </div>
+            <table class="attr-table">
+              <tr>
+                <td class="val">${escapeHTML(student.gender)}</td>
+                <td class="val">${escapeHTML(student.grade)}</td>
+                <td class="val">${escapeHTML(student.cls)}</td>
+              </tr>
+              <tr>
+                <td class="lbl">性別</td>
+                <td class="lbl">学年</td>
+                <td class="lbl">組</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="front-middle">
+            <div class="senkyo-badge">選挙</div>
+            <div class="student-name">${escapeHTML(student.name)}</div>
+          </div>
+
+          <div class="front-bottom">
+            <div class="bottom-row">
+              <div class="bottom-left">生徒会役員選挙</div>
+              <div class="bottom-right">
+                <div>
+                  投票日：令和<span class="fixed-num">${escapeHTML(config.vYear)}</span>年<span class="fixed-num">${escapeHTML(config.vMonth)}</span>月<span class="fixed-num">${escapeHTML(config.vDay)}</span>日（<span class="fixed-day">${escapeHTML(config.vDow)}</span>）
+                </div>
+                <div>投票の場所：${escapeHTML(config.votePlace)}</div>
+              </div>
+            </div>
+            <div class="bottom-row">
+              <div class="bottom-left">投票用紙入場整理券</div>
+              <div class="bottom-right ballot-type">
+                ※投票用紙（
+                <span class="${isWritten ? 'selected' : ''}">記述式</span> ・ <span class="${isSelect ? 'selected' : ''}">選択式</span>
+                ）
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function createBackTicketHTML(student, config) {
+      if (!student) {
+        return '<div class="ticket" style="border-style: dashed; border-color: #ccc;"></div>';
+      }
+      return `
+        <div class="ticket back-ticket">
+          <div class="back-left">
+            <div>
+              <div class="pledge-header">＜期日前投票請求書兼誓約書＞</div>
+              <div class="pledge-text">
+                私は、投票日当日、下記の事由に該当する見込みです。<br>
+                このことが事実であることを誓い、投票用紙を請求します。<br>
+                氏名は必ず本人が署名すること。
+              </div>
+              <div class="pledge-date">
+                令和<span class="date-gap"></span>年<span class="date-gap"></span>月<span class="date-gap"></span>日
+              </div>
+            </div>
+
+            <table class="form-table">
+              <tr>
+                <td class="v-label">住<br>所</td>
+                <td class="write-area"></td>
+              </tr>
+              <tr>
+                <td class="v-label">氏<br>名</td>
+                <td class="write-area"></td>
+              </tr>
+              <tr>
+                <td colspan="2" class="birth-cell">
+                  生年月日<span style="display:inline-block; width:4mm;"></span>平成<span class="date-gap"></span>年<span class="date-gap"></span>月<span class="date-gap"></span>日
+                </td>
+              </tr>
+            </table>
+
+            <table class="reason-table">
+              <tr>
+                <td class="num-col">1</td>
+                <td class="txt-col">冠婚葬祭のため</td>
+              </tr>
+              <tr>
+                <td class="num-col">2</td>
+                <td class="txt-col">旅行、レジャーのため</td>
+              </tr>
+              <tr>
+                <td class="num-col">3</td>
+                <td class="txt-col">病院受診のため</td>
+              </tr>
+              <tr>
+                <td class="num-col">4</td>
+                <td class="txt-col">住所変更のため</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="back-right">
+            <div>
+              <div class="early-section-title">■期日前投票ができる日時・場所</div>
+              <div class="early-row">
+                <span class="early-label">期間：</span>
+                <span class="early-val">
+                  <span class="no-break">令和<span class="early-num">${escapeHTML(config.eStartYear)}</span>年<span class="early-num">${escapeHTML(config.eStartMonth)}</span>月<span class="early-num">${escapeHTML(config.eStartDay)}</span>日（<span class="early-day">${escapeHTML(config.eStartDow)}</span>）～</span><br>
+                  <span class="no-break">令和<span class="early-num">${escapeHTML(config.eEndYear)}</span>年<span class="early-num">${escapeHTML(config.eEndMonth)}</span>月<span class="early-num">${escapeHTML(config.eEndDay)}</span>日（<span class="early-day">${escapeHTML(config.eEndDow)}</span>）</span>
+                </span>
+              </div>
+              <div class="early-row">
+                <span class="early-label">場所：</span>
+                <span class="early-val">${escapeHTML(config.earlyPlace)}</span>
+              </div>
+              <div>※担任、又は副担任が同伴すること。</div>
+            </div>
+
+            <div>
+              <div class="notes-title">＜注意事項＞</div>
+              <ol class="notes-list">
+                <li>
+                  <span class="note-num">1</span>
+                  <span class="note-body">投票所には、この入場券を必ず本人が<span class="no-break">持参して下さい。</span></span>
+                </li>
+                <li>
+                  <span class="note-num">2</span>
+                  <span class="note-body">投票日当日、投票所に行けない場合は、<span class="no-break">期日前投票を</span><span class="no-break">ご利用下さい。</span></span>
+                </li>
+                <li>
+                  <span class="note-num">3</span>
+                  <span class="note-body">本券を紛失した時でも投票できますので、<span class="no-break">投票所で</span><span class="no-break">その旨を受付に申し出て下さい。</span></span>
+                </li>
+                <li>
+                  <span class="note-num">4</span>
+                  <span class="note-body">氏名を詐称し、その他作為の方法をもって<span class="no-break">投票し、</span><span class="no-break">または投票しようとした者は</span><span class="no-break">法律で罰せられます。</span></span>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function escapeHTML(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function generateTickets() {
+      const config = {
+        schoolName: document.getElementById("schoolName").value,
+        committeeName: document.getElementById("committeeName").value,
+        postMark: document.getElementById("postMark").value,
+        votePlace: document.getElementById("votePlace").value,
+        earlyPlace: document.getElementById("earlyPlace").value,
+        vYear: document.getElementById("vYear").value,
+        vMonth: document.getElementById("vMonth").value,
+        vDay: document.getElementById("vDay").value,
+        vDow: document.getElementById("vDow").value,
+        eStartYear: document.getElementById("eStartYear").value,
+        eStartMonth: document.getElementById("eStartMonth").value,
+        eStartDay: document.getElementById("eStartDay").value,
+        eStartDow: document.getElementById("eStartDow").value,
+        eEndYear: document.getElementById("eEndYear").value,
+        eEndMonth: document.getElementById("eEndMonth").value,
+        eEndDay: document.getElementById("eEndDay").value,
+        eEndDow: document.getElementById("eEndDow").value
+      };
+
+      const students = collectStudentsFromTable();
+      const previewArea = document.getElementById("previewArea");
+      const statusText = document.getElementById("statusText");
+
+      previewArea.innerHTML = "";
+
+      if (students.length === 0) {
+        statusText.textContent = "※ 生徒名簿欄に1名以上入力すると入場券が生成されます。";
+        return;
+      }
+
+      for (let i = 0; i < students.length; i += 4) {
+        const chunk = [
+          students[i] || null,
+          students[i + 1] || null,
+          students[i + 2] || null,
+          students[i + 3] || null
+        ];
+
+        const frontSheet = document.createElement("div");
+        frontSheet.className = "sheet";
+        frontSheet.innerHTML = chunk.map(function(s) {
+          return createFrontTicketHTML(s, config);
+        }).join("");
+        previewArea.appendChild(frontSheet);
+
+        const backChunk = [chunk[1], chunk[0], chunk[3], chunk[2]];
+        const backSheet = document.createElement("div");
+        backSheet.className = "sheet";
+        backSheet.innerHTML = backChunk.map(function(s) {
+          return createBackTicketHTML(s, config);
+        }).join("");
+        previewArea.appendChild(backSheet);
+      }
+
+      const sheetCount = Math.ceil(students.length / 4);
+      statusText.textContent = `✅ ${students.length}名分（A4横向き両面 ${sheetCount}枚 ／ 全${sheetCount * 2}ページ）を生成中`;
+    }
+
+    window.onload = loadSampleRows;
+  </script>
+</body>
+</html>
